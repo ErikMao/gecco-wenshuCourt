@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+		xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:tx="http://www.springframework.org/schema/tx"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:aop="http://www.springframework.org/schema/aop" xmlns:jpa="http://www.springframework.org/schema/data/jpa"
+	xmlns:solr="http://www.springframework.org/schema/data/solr"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+       http://www.springframework.org/schema/beans/spring-beans.xsd
+       http://www.springframework.org/schema/task
+       http://www.springframework.org/schema/task/spring-task-4.2.xsd
+       http://www.springframework.org/schema/tx
+       http://www.springframework.org/schema/tx/spring-tx.xsd
+       http://www.springframework.org/schema/aop
+       http://www.springframework.org/schema/aop/spring-aop.xsd
+       http://www.springframework.org/schema/context
+       http://www.springframework.org/schema/context/spring-context.xsd
+       http://www.springframework.org/schema/data/jpa
+       http://www.springframework.org/schema/data/jpa/spring-jpa.xsd
+       http://www.springframework.org/schema/data/solr
+       http://www.springframework.org/schema/data/solr/spring-solr.xsd
+       http://www.springframework.org/schema/util 
+       http://www.springframework.org/schema/util/spring-util-3.0.xsd"
+	default-lazy-init="true">
+
+	<!-- 扫描service、dao -->
+
+	<!-- 加载service,此时要排除要controller,因为controller已经spring-mvc中加载过了 -->
+	<context:component-scan base-package="cn.com.faduit.crawler.*">
+		<context:exclude-filter type="annotation"
+			expression="org.springframework.stereotype.Controller" />
+	</context:component-scan>
+	<context:annotation-config/>
+	
+	<bean id="springPipelineFactory" class="com.geccocrawler.gecco.spring.SpringPipelineFactory"/>
+
+	<!-- 配置连接池 -->
+	<context:property-placeholder location="classpath:jdbc.properties" />
+	<util:properties id="fardobd" location="classpath:sysConfig.properties"></util:properties>
+	<!--  -->
+	<bean id="dataSource" class="org.springframework.jndi.JndiObjectFactoryBean">  
+	        <property name="jndiName" value="java:comp/env/jdbc/crawler" />       
+	</bean>
+	
+
+	<!-- 事务管理 
+	<bean id="transactionManager"
+		class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+		<property name="dataSource" ref="dataSource"/>
+	</bean>-->
+
+	<!-- 事务管理 属性 -->
+	<tx:advice id="transactionAdvice" transaction-manager="transactionManager">
+		<tx:attributes>
+			<tx:method name="find*" propagation="REQUIRED" read-only="true" />
+			<tx:method name="get*" propagation="REQUIRED" read-only="true" />
+			<tx:method name="add*" propagation="REQUIRED" />
+			<tx:method name="save*" propagation="REQUIRED" />
+			<tx:method name="insert*" propagation="REQUIRED" />
+			<tx:method name="update*" propagation="REQUIRED" />
+			<tx:method name="edit*" propagation="REQUIRED" />
+			<tx:method name="delete*" propagation="REQUIRED" />
+		</tx:attributes>
+	</tx:advice>
+	<bean id="transactionManager" class="org.springframework.orm.jpa.JpaTransactionManager">
+		<property name="entityManagerFactory" ref="entityManagerFactory" />
+	</bean>
+	<!-- 开启注解事务 -->
+    <tx:annotation-driven transaction-manager="transactionManager" proxy-target-class="true" />
+	<!--spring-data-jpa -->
+	<bean id="hibernateJpaVendorAdapter"
+		class="org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter">
+		<!--<property name="databasePlatform"> 根据DataSource自动识别 </property> -->
+	</bean>
+	<bean id="entityManagerFactory" class="org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean">
+        <property name="dataSource" ref="dataSource"/>
+        <property name="jpaVendorAdapter" ref="hibernateJpaVendorAdapter"/>
+        <property name="packagesToScan">
+        	<array>
+        		<value>cn.com.faduit.crawler.entity</value>
+        	</array>
+        </property>
+        <property name="jpaProperties">
+            <props>
+                <prop key="hibernate.show_sql">false</prop>
+                <prop key="hibernate.format_sql">false</prop>
+                <!--<prop key="hibernate.use_sql_comments">true</prop>-->
+                <!--<prop key="hibernate.generate_statistics">true</prop>-->
+                <prop key="hibernate.hbm2ddl.auto">none</prop>
+                <prop key="hibernate.ejb.naming_strategy">org.hibernate.cfg.ImprovedNamingStrategy</prop>
+                <prop key="hibernate.cache.region.factory_class">org.hibernate.cache.ehcache.EhCacheRegionFactory</prop>
+                <prop key="javax.persistence.sharedCache.mode">ENABLE_SELECTIVE</prop>
+                <prop key="hibernate.cache.provider_configuration_file_resource_path">/ehcache.xml</prop>
+                <prop key="hibernate.generate_statistics">false</prop>
+            </props>
+        </property>
+    </bean>
+	<!-- 添加jdbctemplate -->
+	<bean id="jdbcTemplate" class="org.springframework.jdbc.core.JdbcTemplate">
+		<property name="dataSource" ref="dataSource" />
+	</bean>
+	
+
+	<jpa:repositories base-package="cn.com.faduit.crawler.jpa.repository"
+		entity-manager-factory-ref="entityManagerFactory"
+		transaction-manager-ref="transactionManager" />
+	
+	<!-- oracle datasource config begin-->
+	<bean id="oracleDataSource" class="org.springframework.jndi.JndiObjectFactoryBean">  
+	        <property name="jndiName" value="java:comp/env/jdbc/fadubd" />       
+	</bean>
+	<bean id="oracleJdbcTemplate" class="org.springframework.jdbc.core.JdbcTemplate">
+		<property name="dataSource" ref="oracleDataSource" />
+	</bean>
+	<!-- oracle datasource config end -->
+	
+	
+	 <!-- =====================日常任务job========================== -->
+	 <!-- 
+	
+	 --> 
+	<bean id="crawlerJobDetail" class="org.springframework.scheduling.quartz.MethodInvokingJobDetailFactoryBean">
+		<property name="targetObject" ref="crawlerCourtJob"/>
+		<property name="targetMethod" value="execute"	/>
+		<property name="concurrent" value="false" />
+        <!-- 是否允许任务并发执行。当值为false时，表示必须等到前一个线程处理完毕后才再启一个新的线程 -->
+	</bean>
+	<bean id="CrawlerDailyTaskCronTriggerBean" class="org.springframework.scheduling.quartz.CronTriggerFactoryBean">  
+	       <property name="jobDetail" ref="crawlerJobDetail"/>  
+	       <property name="cronExpression" value="0 0/30 6 * * ?"/><!-- Second  Minutes Hour Day-of-Month Month Year(可选)-->  
+	</bean>
+	
+    <!-- ======================== 调度工厂 ======================== --> 
+    <bean id="SpringJobSchedulerFactoryBean" class="org.springframework.scheduling.quartz.SchedulerFactoryBean">  
+        <property name="triggers">  
+            <list>   
+                <ref bean="CrawlerDailyTaskCronTriggerBean" />
+                <!-- <ref bean="StatDailyTaskCronTriggerBean" /> -->
+            </list>  
+        </property>  
+    </bean>    
+</beans>
